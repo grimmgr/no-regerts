@@ -21,6 +21,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, '../src/index.html'),
       minify: true,
+      favicon: path.resolve(__dirname, '../src/favicon.ico'),
     }),
     new MiniCSSExtractPlugin(),
   ],
@@ -60,6 +61,15 @@ module.exports = {
         type: 'asset/resource',
         generator: {
           filename: 'assets/fonts/[hash][ext]',
+        },
+      },
+      // Favicon
+      {
+        test: /\.ico$/i,
+        type: 'asset/resource',
+        // Use 'generator' to output unique name (based on webpack pattern e.g. [name], [ext], etc.)
+        generator: {
+          filename: '[name][ext][query]',
         },
       },
     ],
