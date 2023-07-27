@@ -1,18 +1,27 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-export const setupScene = (canvas) => {
+export const scene = new THREE.Scene();
+
+export const camera = new THREE.PerspectiveCamera(
+  50,
+  window.innerWidth / innerHeight,
+  1,
+  1000
+);
+
+export const setupScene = (canvas, scene, camera) => {
   // scene
-  const scene = new THREE.Scene();
+  // const scene = new THREE.Scene();
   scene.background = new THREE.Color();
 
   // camera
-  const camera = new THREE.PerspectiveCamera(
-    50,
-    window.innerWidth / innerHeight,
-    1,
-    1000
-  );
+  // const camera = new THREE.PerspectiveCamera(
+  //   50,
+  //   window.innerWidth / innerHeight,
+  //   1,
+  //   1000
+  // );
   camera.position.set(0, 0, 200);
   scene.add(camera);
 

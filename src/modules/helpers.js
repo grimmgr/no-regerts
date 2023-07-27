@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeCounter, trackBoolean } from './trackers';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { svgCenter } from './svgParticles';
 
 export const getCenter = (object) => {
   const boundingBox = new THREE.Box3().setFromObject(object);
@@ -41,17 +42,20 @@ export const getInverseGeometries = (group, center) => {
   return inverseGeometries;
 };
 
-export const initTrackers = (group) => {
-  const trackerGroup = group.children.map((line) => {
-    return {
-      line: line,
-      indexCounter: makeCounter(0),
-      inverseDrawn: trackBoolean(false),
-      drawInverse: trackBoolean(false),
+export const initUserData = (group) => {
+  group.userData = {
+    wanderShape: false,
+    drawInverseShape: false,
+    drawOriginalShape: false,
+    drawCount: 0,
+  };
+  group.children.forEach((mesh) => {
+    mesh.userData = {
+      indexCounter: 0,
+      inverseDrawn: false,
+      drawInverse: false,
     };
   });
-
-  return trackerGroup;
 };
 
 export const getMaterialToAnimate = (group, colorArray) => {
@@ -78,15 +82,14 @@ export const getMaterialToAnimate = (group, colorArray) => {
   return materialToAnimate;
 };
 
-export const initAnimatedGroup = (group, center, colorArray) => {
+export const getGroupConstants = (group, center, colorArray) => {
   const totalVertexCount = group.children.reduce(
     (total, line) => total + line.geometry.attributes.position.count,
     0
   );
-  const initialGeometries = getGeometries(group, center);
+  const initialGeometries = getGeometries(group);
   const inverseGeometries = getInverseGeometries(group, center);
   const materialToAnimate = getMaterialToAnimate(group, colorArray);
-  const linesWithTrackers = initTrackers(group, center);
   const pauseTime = 6000;
 
   return {
@@ -94,45 +97,8 @@ export const initAnimatedGroup = (group, center, colorArray) => {
     initialGeometries,
     inverseGeometries,
     materialToAnimate,
-    linesWithTrackers,
     pauseTime,
   };
-};
-
-export const initGroupTrackers = () => {
-  const wanderShape = trackBoolean(false);
-  const drawInverseShape = trackBoolean(false);
-  const drawOriginalShape = trackBoolean(false);
-  const drawCount = makeCounter(0);
-
-  return {
-    wanderShape,
-    drawInverseShape,
-    drawOriginalShape,
-    drawCount,
-  };
-};
-
-export const initMeshAnimationGroup = (group) => {
-  const animationGroup = new THREE.AnimationObjectGroup();
-  group.children.forEach((mesh) => animationGroup.add(mesh));
-
-  const mixer = new THREE.AnimationMixer(animationGroup);
-
-  const opacityKF = new THREE.NumberKeyframeTrack(
-    '.material.opacity',
-    [0, 3, 6],
-    [0, 0.7, 0]
-  );
-
-  opacityKF.setInterpolation(THREE.InterpolateSmooth);
-
-  const fadeInOut = new THREE.AnimationClip('fadeInOut', -1, [opacityKF]);
-
-  const action = mixer.clipAction(fadeInOut);
-  action.setLoop(THREE.LoopOnce);
-
-  return { mixer, action };
 };
 
 export const getLastTwoVertices = (positionArray, vertexCount) => {
@@ -211,3 +177,21 @@ const invertColor = (hex) => {
 };
 
 export const posOrNeg = (num) => (Math.random() > 0.5 ? -1 * num : 1 * num);
+
+export const loadFont = (fontUrl) => {
+  return new Promise((resolve) => {
+    new FontLoader().load(fontUrl, resolve);
+  });
+};
+
+export const getView = (camera) => {
+  const vFOV = THREE.MathUtils.degToRad(camera.fov); // convert vertical fov to radians
+  const height = 2 * Math.tan(vFOV / 2) * 201; // visible height
+  const width = height * camera.aspect; // visible width
+
+  return { height, width };
+};
+
+export const getRandomValueInRange = (min, max) => {
+  return Math.random() * (max - min) + min;
+};

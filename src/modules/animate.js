@@ -6,18 +6,15 @@ import {
 } from './helpers';
 
 const zNormal = new THREE.Vector3(0, 0, 1);
-const white = new THREE.Color(0xdcdcdc);
-const black = new THREE.Color(0x000000);
 
-export const drawLine = (drawLine, targetGeometry) => {
-  const { line, indexCounter, inverseDrawn, drawInverse } = drawLine;
+export const drawLine = (line, targetGeometry) => {
   const positionArray = line.geometry.attributes.position;
   const vertexCount = positionArray.count;
   const targetPositionArray = targetGeometry.attributes.position;
   let newVertex;
 
   // stop animation once target is drawn
-  if (inverseDrawn.value()) return;
+  if (line.userData.inverseDrawn) return;
 
   // get position of first vertex of target line
   const targetFirstVertex = new THREE.Vector3().fromBufferAttribute(
@@ -31,10 +28,10 @@ export const drawLine = (drawLine, targetGeometry) => {
   );
 
   // line is moving toward target
-  if (!drawInverse.value()) {
+  if (!line.userData.drawInverse) {
     // if lastVertex is close to targetFirstVertex, start drawing target line
     if (lastVertex.distanceTo(targetFirstVertex) < 3) {
-      drawInverse.setTrue();
+      line.userData.drawInverse = true;
     } else {
       // otherwise, move line toward first vertex of target
       newVertex =
@@ -49,32 +46,24 @@ export const drawLine = (drawLine, targetGeometry) => {
   }
 
   // if line is tracing target
-  if (drawInverse.value()) {
+  if (line.userData.drawInverse) {
     // stop if the entire line is drawn already
-    if (indexCounter.value() === vertexCount) {
-      inverseDrawn.setTrue();
+    if (line.userData.indexCounter === vertexCount) {
+      line.userData.inverseDrawn = true;
       return;
     }
     // otherwise, trace line
     newVertex = new THREE.Vector3().fromBufferAttribute(
       targetPositionArray,
-      indexCounter.value()
+      line.userData.indexCounter
     );
-    indexCounter.increment();
+    line.userData.indexCounter += 1;
   }
 
   updatePositionArray(positionArray, vertexCount, newVertex);
 };
 
-export const drawGroup = (drawGroup, targetGeometries) => {
-  for (let i = 0; i < drawGroup.length; i++) {
-    drawLine(drawGroup[i], targetGeometries[i]);
-  }
-};
-
-export const wander = (drawLine) => {
-  const { line } = drawLine;
-
+export const wander = (line) => {
   const positionArray = line.geometry.attributes.position;
   const vertexCount = positionArray.count;
   let newVertex;
@@ -96,111 +85,90 @@ export const wander = (drawLine) => {
   updatePositionArray(positionArray, vertexCount, newVertex);
 };
 
-export const toggleTrackers = (num, firstTracker, nextTracker) => {
-  firstTracker.setTrue();
-  setTimeout(() => {
-    firstTracker.setFalse();
-    nextTracker.setTrue();
-  }, num);
-};
-
 export const animateLineGroup = (
-  groupWithTrackers,
-  groupTrackers,
+  group,
   initialGeometries,
   inverseGeometries,
   pauseTime,
-  action
+  onFrontFinished,
+  onBackFinished
 ) => {
-  const { wanderShape, drawInverseShape, drawOriginalShape, drawCount } =
-    groupTrackers;
+  group.userData.wanderShape && group.children.forEach((line) => wander(line));
 
-  wanderShape.value() && groupWithTrackers.forEach((line) => wander(line));
-
-  if (drawInverseShape.value()) {
-    drawGroup(groupWithTrackers, inverseGeometries);
+  if (group.userData.drawInverseShape) {
+    group.children.forEach((line, index) =>
+      drawLine(line, inverseGeometries[index])
+    );
   }
 
-  if (drawOriginalShape.value()) {
-    drawGroup(groupWithTrackers, initialGeometries);
+  if (group.userData.drawOriginalShape) {
+    group.children.forEach((line, index) =>
+      drawLine(line, initialGeometries[index])
+    );
   }
 
-  if (groupWithTrackers.every((line) => line.inverseDrawn.value() === true)) {
-    groupWithTrackers.forEach((line) => {
-      line.drawInverse.setFalse();
-      line.inverseDrawn.setFalse();
+  if (group.children.every((line) => line.userData.inverseDrawn === true)) {
+    group.children.forEach((line) => {
+      line.userData.drawInverse = false;
+      line.userData.inverseDrawn = false;
     });
-
-    if (drawCount.value() % 2 === 0) {
-      drawInverseShape.setFalse();
+    // when back(inverse) finishes
+    if (group.userData.drawCount % 2 === 0) {
+      group.userData.drawInverseShape = false;
+      onBackFinished();
       setTimeout(() => {
-        drawCount.increment();
-        groupWithTrackers.forEach((line) => line.indexCounter.reset());
-        toggleTrackers(pauseTime, wanderShape, drawOriginalShape);
+        group.userData.drawCount += 1;
+        group.children.forEach((line) => (line.userData.indexCounter = 0));
+        group.userData.wanderShape = true;
+        setTimeout(() => {
+          group.userData.wanderShape = false;
+          group.userData.drawOriginalShape = true;
+        }, pauseTime);
       }, pauseTime);
+      // when front(original) finishes
     } else {
-      drawOriginalShape.setFalse();
-      action.reset().play();
+      group.userData.drawOriginalShape = false;
+      onFrontFinished();
       setTimeout(() => {
-        drawCount.increment();
-        groupWithTrackers.forEach((line) => line.indexCounter.reset());
-        toggleTrackers(pauseTime, wanderShape, drawInverseShape);
+        group.userData.drawCount += 1;
+        group.children.forEach((line) => (line.userData.indexCounter = 0));
+        group.userData.wanderShape = true;
+        setTimeout(() => {
+          group.userData.wanderShape = false;
+          group.userData.drawInverseShape = true;
+        }, pauseTime);
       }, pauseTime);
     }
   }
 
-  groupWithTrackers.forEach(
-    (trackedLine) =>
-      (trackedLine.line.geometry.attributes.position.needsUpdate = true)
+  group.children.forEach(
+    (line) => (line.geometry.attributes.position.needsUpdate = true)
   );
 };
 
 // todo: use vertex shader instead
-export const displaceVertices = (mesh, geometry) => {
-  const positionArray = mesh.geometry.attributes.position;
-  const initialPositionArray = geometry.attributes.position;
+// export const displaceVertices = (mesh, geometry) => {
+//   const positionArray = mesh.geometry.attributes.position;
+//   const initialPositionArray = geometry.attributes.position;
 
-  const vertexCount = positionArray.count;
+//   const vertexCount = positionArray.count;
 
-  for (let i = 0; i < vertexCount; i++) {
-    positionArray.setXYZ(
-      i,
-      initialPositionArray.getX(i) + (Math.random() - 0.5) * 40,
-      initialPositionArray.getY(i) + (Math.random() - 0.5) * 40,
-      initialPositionArray.getZ(i) + (Math.random() - 0.5) * 40
-    );
-  }
-};
+//   for (let i = 0; i < vertexCount; i++) {
+//     positionArray.setXYZ(
+//       i,
+//       initialPositionArray.getX(i) + (Math.random() - 0.5) * 40,
+//       initialPositionArray.getY(i) + (Math.random() - 0.5) * 40,
+//       initialPositionArray.getZ(i) + (Math.random() - 0.5) * 40
+//     );
+//   }
+// };
 
-export const displaceVerticesGroup = (group, geometries) => {
-  for (let i = 0; i < group.children.length; i++) {
-    displaceVertices(group.children[i], geometries[i]);
-  }
+// export const displaceVerticesGroup = (group, geometries) => {
+//   for (let i = 0; i < group.children.length; i++) {
+//     displaceVertices(group.children[i], geometries[i]);
+//   }
 
-  group.children.forEach(
-    (mesh) => (mesh.geometry.attributes.position.needsUpdate = true)
-  );
-};
-
-export const changeColors = (scene, materials, drawCount, percent) => {
-  scene.background
-    .copy(white)
-    .lerp(
-      black,
-      drawCount.value() % 2 === 0
-        ? Math.pow(percent, 5)
-        : Math.pow(1 - percent, 1 / 4)
-    );
-
-  materials.forEach((materialInfo) => {
-    const { material, startColor, endColor } = materialInfo;
-    material.color
-      .copy(startColor)
-      .lerp(
-        endColor,
-        drawCount.value() % 2 === 0
-          ? Math.pow(percent, 5)
-          : Math.pow(1 - percent, 1 / 4)
-      );
-  });
-};
+//   group.children.forEach(
+//     (mesh) => (mesh.geometry.attributes.position.needsUpdate = true)
+//   );
+// };

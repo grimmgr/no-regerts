@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { getCenter } from '../modules/helpers';
 
+export let svgCenter = new THREE.Vector3();
+
 export const loadSvgParticles = async (svgUrl) => {
   const svgLoader = new SVGLoader();
 
@@ -36,10 +38,10 @@ export const loadSvgParticles = async (svgUrl) => {
     }
   }
 
-  const svgCenter = getCenter(svgParticleGroup);
+  svgCenter = getCenter(svgParticleGroup);
 
   svgParticleGroup.position.x = -svgCenter.x;
   svgParticleGroup.position.y = -svgCenter.y;
 
-  return { svgParticleGroup, svgCenter };
+  return { svgParticleGroup };
 };

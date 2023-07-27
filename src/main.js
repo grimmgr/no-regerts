@@ -1,20 +1,11 @@
 import './style.css';
 import * as THREE from 'three';
-import { setupScene } from './modules/scene';
-import {
-  initGroupTrackers,
-  initAnimatedGroup,
-  initMeshAnimationGroup,
-  getGeometries,
-} from './modules/helpers';
-import {
-  animateLineGroup,
-  changeColors,
-  displaceVerticesGroup,
-  toggleTrackers,
-} from './modules/animate';
-import { loadSvgMesh } from './modules/svgMesh';
-import { loadSvgParticles } from './modules/svgParticles';
+import { camera, scene, setupScene } from './modules/scene';
+import { initUserData, getGroupConstants } from './modules/helpers';
+import { animateLineGroup } from './modules/animate';
+import { loadSvgParticles, svgCenter } from './modules/svgParticles';
+import { changeColors, loadBackdrop } from './modules/backdrop';
+import { animateText, dropLetters } from './modules/text';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'lil-gui';
 
@@ -27,73 +18,81 @@ const svgUrl = '../models/shapes.svg';
 const stats = new Stats();
 container.appendChild(stats.dom);
 
-const { camera, controls, scene, render } = setupScene(canvas);
+const { controls, render } = setupScene(canvas, scene, camera);
 
-// Mesh
-const { svgMeshGroup } = await loadSvgMesh(svgUrl);
-const meshGeometries = getGeometries(svgMeshGroup);
-svgMeshGroup.translateZ(-1);
-scene.add(svgMeshGroup);
-
-const { mixer, action } = initMeshAnimationGroup(svgMeshGroup);
-action.play();
+// Backdrop
+loadBackdrop();
 
 // Particles
-const { svgParticleGroup, svgCenter } = await loadSvgParticles(svgUrl);
+const { svgParticleGroup } = await loadSvgParticles(svgUrl);
+scene.add(svgParticleGroup);
+
+initUserData(svgParticleGroup);
 
 const {
   totalVertexCount,
   initialGeometries,
   inverseGeometries,
   materialToAnimate,
-  linesWithTrackers,
   pauseTime,
-} = initAnimatedGroup(svgParticleGroup, svgCenter, ['3C3A3D', '434345']);
+} = getGroupConstants(svgParticleGroup, svgCenter, ['3C3A3D', '434345']);
 
-scene.add(svgParticleGroup);
+const onFrontFinished = () => {
+  dropLetters(null, { color: 0x000000, orientation: 'horizontal' });
+};
 
-const groupTrackers = initGroupTrackers();
-const { wanderShape, drawInverseShape, drawOriginalShape, drawCount } =
-  groupTrackers;
+const onBackFinished = () => {
+  dropLetters(['NO', 'REGERTS'], { color: 0xffffff, orientation: 'vertical' });
+};
 
+// after a pause, wander shape and then draw inverse
 setTimeout(() => {
-  toggleTrackers(pauseTime, wanderShape, drawInverseShape);
+  svgParticleGroup.userData.wanderShape = true;
+  setTimeout(() => {
+    svgParticleGroup.userData.wanderShape = false;
+    svgParticleGroup.userData.drawInverseShape = true;
+  }, pauseTime);
 }, pauseTime);
 
-const clock = new THREE.Clock();
+// Text
+dropLetters(["I THINK WE'RE", 'HAVING FUN'], {
+  color: 0x000000,
+  orientation: 'horizontal',
+});
 
 const animate = () => {
   requestAnimationFrame(animate);
-  // mixer
-  const delta = clock.getDelta();
-  mixer.update(delta);
 
   controls.update();
   stats.update();
 
   render();
 
-  // mesh animation
-  displaceVerticesGroup(svgMeshGroup, meshGeometries);
-
   // line animation
   animateLineGroup(
-    linesWithTrackers,
-    groupTrackers,
+    svgParticleGroup,
     initialGeometries,
     inverseGeometries,
     pauseTime,
-    action
+    onFrontFinished,
+    onBackFinished
   );
 
   // background and material animation
   const percentVerticesDrawn =
-    linesWithTrackers.reduce(
-      (total, line) => total + line.indexCounter.value(),
+    svgParticleGroup.children.reduce(
+      (total, line) => total + line.userData.indexCounter,
       0
     ) / totalVertexCount;
 
-  changeColors(scene, materialToAnimate, drawCount, percentVerticesDrawn);
+  changeColors(
+    materialToAnimate,
+    svgParticleGroup.userData.drawCount,
+    percentVerticesDrawn
+  );
+
+  // text animation
+  animateText(percentVerticesDrawn);
 
   // wanderFor(4000);
 };
@@ -101,3 +100,8 @@ const animate = () => {
 animate();
 // controls.addEventListener('change', render);
 // render();
+
+// to do
+// spread out words
+// chaos
+// voice/volume input
